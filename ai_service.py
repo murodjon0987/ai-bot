@@ -103,7 +103,18 @@ async def colorize_image(input_path: str, output_path: str) -> str:
 # 3. FONNI O'CHIRISH (REMOVE BACKGROUND / PNG STICKER)
 async def remove_bg(input_path: str, output_path: str) -> str:
     def _process_remove_bg(inp, out):
-        # OpenCV GrabCut + Threshold yordamida orqa fonni ajratish
+        # 1. Eng zamonaviy neyrotarmoqli AI fon tozalash (rembg u2netp)
+        try:
+            from rembg import remove, new_session
+            session = new_session("u2netp")
+            with Image.open(inp) as img:
+                res = remove(img, session=session)
+                res.save(out, "PNG")
+            return out
+        except Exception as e:
+            logger.warning(f"rembg ishlatishda ogohlantirish: {e}. OpenCV fallback ishlatiladi.")
+
+        # 2. OpenCV GrabCut fallback
         cv_img = cv2.imread(inp)
         if cv_img is None:
             raise ValueError("Rasm o'qilmadi")
@@ -113,15 +124,12 @@ async def remove_bg(input_path: str, output_path: str) -> str:
         bgd_model = np.zeros((1, 65), np.float64)
         fgd_model = np.zeros((1, 65), np.float64)
         
-        # Asosiy ob'ekt markazda joylashgan degan taxmin bilan chegaralash
         rect = (int(w * 0.05), int(h * 0.05), int(w * 0.9), int(h * 0.9))
         cv2.grabCut(cv_img, mask, rect, bgd_model, fgd_model, 4, cv2.GC_INIT_WITH_RECT)
         
         mask2 = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
-        # Yumshoq chekkalar (anti-aliasing)
         mask_blurred = cv2.GaussianBlur(mask2 * 255, (7, 7), 0)
         
-        # RGBA formatiga o'tkazish
         b, g, r = cv2.split(cv_img)
         rgba = [b, g, r, mask_blurred]
         dst = cv2.merge(rgba, 4)
@@ -133,14 +141,40 @@ async def remove_bg(input_path: str, output_path: str) -> str:
     return await loop.run_in_executor(None, _process_remove_bg, input_path, output_path)
 
 
-# 4. 3x4 HUJJATGA RASM (PASSPORT 3x4 + 6 TALIK QOG'OZ)
-async def passport_3x4(input_path: str, output_path: str) -> str:
+# 4. 3x4 HUJJATGA RASM (PASSPORT 3x4 + 6 TALIK QOG'OZ + KOSTYUMLI FORMAT)
+async def passport_3x4(input_path: str, output_path: str, wear_suit: bool = True) -> str:
     def _process_passport(inp, out):
         with Image.open(inp) as img:
             img = img.convert("RGB")
             w, h = img.size
             
-            # 3x4 proporsiyasida markaziy qirqish
+            # 1. Orqa fonni tozalab oppoq pasport foni qilish
+            try:
+                from rembg import remove, new_session
+                session = new_session("u2netp")
+                cutout = remove(img, session=session)
+                white_canvas = Image.new("RGB", (w, h), color="#ffffff")
+                white_canvas.paste(cutout, (0, 0), cutout)
+                img = white_canvas
+            except Exception as e:
+                logger.warning(f"Passport bg rembg error: {e}")
+
+            # 2. Kostyum / Klassik ko'ylak kiydirish
+            suit_path = os.path.join(os.path.dirname(__file__), "assets", "suit_clean_collar.png")
+            if wear_suit and os.path.exists(suit_path):
+                try:
+                    suit = Image.open(suit_path).convert("RGBA")
+                    sw, sh = suit.size
+                    # Kostyum eni odam yelkasiga moslanadi
+                    scale = (w * 1.65) / sw
+                    suit_scaled = suit.resize((int(w * 1.65), int(sh * scale)), Image.Resampling.LANCZOS)
+                    suit_x = (w - int(w * 1.65)) // 2
+                    suit_y = int(h * 0.52)
+                    img.paste(suit_scaled, (suit_x, suit_y), suit_scaled)
+                except Exception as se:
+                    logger.warning(f"Passport suit overlay error: {se}")
+
+            # 3. 3x4 proporsiyasida markaziy qirqish
             target_aspect = 3.0 / 4.0
             current_aspect = w / h
             
@@ -150,38 +184,54 @@ async def passport_3x4(input_path: str, output_path: str) -> str:
                 img = img.crop((left, 0, left + new_w, h))
             else:
                 new_h = int(w / target_aspect)
-                # Yuz teparoqda bo'lgani uchun yuqoridan ko'proq joy qoldirish
-                top = int((h - new_h) * 0.25)
+                top = int((h - new_h) * 0.15)
                 img = img.crop((0, top, w, top + new_h))
             
             # Standart 3x4 piksel o'lchami (600x800)
             single = img.resize((600, 800), Image.Resampling.LANCZOS)
-            # Tiniqlashtirish va yorug'likni rasmiy formatga moslash
-            single = ImageEnhance.Sharpness(single).enhance(1.3)
-            single = ImageEnhance.Contrast(single).enhance(1.1)
+            single = ImageEnhance.Sharpness(single).enhance(1.25)
+            single = ImageEnhance.Contrast(single).enhance(1.08)
             
-            # 6 talik bosma qog'oz varag'i (10x15 sm foto qog'oz)
+            # 6 talik bosma qog'oz varag'i (10x15 sm foto qog'oz, 1800x1200)
             sheet = Image.new("RGB", (1800, 1200), color="#ffffff")
+            thumb = single.resize((480, 640), Image.Resampling.LANCZOS)
+            thumb = ImageOps.expand(thumb, border=2, fill="#cbd5e1")
             
-            # Kichik o'lchamda 6 ta rasmni joylashtirish (3 qator, 2 ustun yoki 2 qator 3 ustun)
-            thumb = single.resize((500, 666), Image.Resampling.LANCZOS)
-            # Rasmiy oq hoshiya
-            thumb = ImageOps.expand(thumb, border=4, fill="#e0e0e0")
+            # 6 ta rasmni varaqqa chizish (2 qator, 3 ustun)
+            for pos in [(80, 50), (660, 50), (1240, 50), (80, 730), (660, 730), (1240, 730)]:
+                sheet.paste(thumb, pos)
             
-            positions = [
-                (70, 70), (620, 70), (1170, 70),
-                (70, 770), (620, 770), (1170, 770)
-            ]
-            
-            # 6 ta rasmni varaqqa chizish
-            for pos in [(80, 50), (640, 50), (1200, 50), (80, 730), (640, 730), (1200, 730)]:
-                sheet.paste(thumb.resize((480, 640)), pos)
-            
-            sheet.save(out, "JPEG", quality=95)
+            sheet.save(out, "JPEG", quality=96)
             return out
 
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _process_passport, input_path, output_path)
+
+
+# 7. GOOGLE GEMINI AI (SMART PHOTO ADVICE & CHAT)
+async def ask_gemini_ai(prompt: str) -> str:
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
+        return "Gemini API kaliti ulanmagan."
+    import aiohttp
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
+    payload = {
+        "contents": [{"parts": [{"text": f"Siz Xotira AI fotostudiyasining professional AI ekspertisiz. Foydalanuvchiga fotosuratlar, tahrirlash va dizayn bo'yicha o'zbek tilida qisqa, aniq va do'stona javob bering:\n\n{prompt}"}]}]
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            return parts[0].get("text", "")
+                return "Gemini AI hozirda javob bera olmadi. Iltimos qayta urinib ko'ring."
+    except Exception as e:
+        logger.error(f"Gemini API xatolik: {e}")
+        return f"Gemini xatoligi: {e}"
 
 
 # 5. ANIME / ART / KOMIKS STILI (CARTOONIZE)

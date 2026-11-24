@@ -571,6 +571,22 @@ async def btn_send_photo(message: types.Message):
     )
 
 
+# GEMINI AI BILAN SUHBAT / MASLAHAT
+@dp.message(F.text.startswith("/ai") | F.text.startswith("🤖") | F.text.startswith("/gemini"))
+async def handle_gemini_query(message: types.Message):
+    query = message.text.replace("/ai", "").replace("🤖", "").replace("/gemini", "").strip()
+    if not query:
+        await message.answer(
+            "🤖 **Gemini AI:** Fotosuratlar, ranglar yoki dizayn bo'yicha istalgan savolingizni yozing!\n"
+            "Masalan: `/ai Qadimgi oq-qora suratlarni sifatli skaner qilish sirlari`",
+            parse_mode="Markdown"
+        )
+        return
+    wait_msg = await message.answer("🧠 *Gemini AI tahlil qilmoqda...*", parse_mode="Markdown")
+    reply = await ai_service.ask_gemini_ai(query)
+    await wait_msg.edit_text(f"🤖 **Gemini AI maslahati:**\n\n{reply}")
+
+
 # RASM QABUL QILISH
 @dp.message(F.photo | F.document)
 async def handle_photo(message: types.Message, state: FSMContext):
@@ -668,7 +684,7 @@ async def process_photo_action(callback: types.CallbackQuery):
         elif action == "remove_bg":
             await ai_service.remove_bg(input_path, output_path)
         elif action == "passport":
-            await ai_service.passport_3x4(input_path, output_path)
+            await ai_service.passport_3x4(input_path, output_path, wear_suit=True)
         elif action == "cartoon":
             await ai_service.cartoonize_image(input_path, output_path)
         elif action == "animate":
