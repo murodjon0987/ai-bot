@@ -9,5 +9,7 @@ services:
         sync: false
       - key: BOT_USERNAME
         value: xotira_ai_bot
+      - key: GEMINI_API_KEY
+        sync: false
       - key: PORT
         value: 10000

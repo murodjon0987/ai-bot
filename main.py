@@ -652,7 +652,16 @@ async def process_ai_support_chat(message: types.Message, state: FSMContext):
         return
 
     wait_msg = await message.answer("🧠 *Support AI o'ylamoqda...*", parse_mode="Markdown")
-    reply = await ai_service.ask_gemini_ai(message.text, user_id=message.from_user.id)
+    try:
+        reply = await asyncio.wait_for(
+            ai_service.ask_gemini_ai(message.text, user_id=message.from_user.id),
+            timeout=22.0
+        )
+    except asyncio.TimeoutError:
+        reply = "Kechirasiz, serverda yuklama yuqori bo'lgani sababli javob kechikdi. Iltimos, qaytadan yozib ko'ring."
+    except Exception as e:
+        logger.error(f"Support AI xatosi: {e}")
+        reply = "Kechirasiz, sun'iy intellekt xizmatida vaqtincha xatolik yuz berdi. Iltimos, birozdan so'ng qayta urinib ko'ring."
     
     reply_text = (
         f"🤖 **Support AI:**\n\n"
@@ -663,8 +672,9 @@ async def process_ai_support_chat(message: types.Message, state: FSMContext):
     try:
         await wait_msg.edit_text(reply_text, reply_markup=get_support_keyboard(), parse_mode="Markdown")
     except Exception:
-        # Markdown maxsus belgilari bo'lsa oddiy matn ko'rinishida yuborish
-        await wait_msg.edit_text(reply_text.replace("**", "").replace("*", ""), reply_markup=get_support_keyboard())
+        # Markdown maxsus belgilari bo'lsa xavfsiz tozalab yuborish
+        safe_reply = reply_text.replace("*", "").replace("_", " ").replace("`", "")
+        await wait_msg.edit_text(safe_reply, reply_markup=get_support_keyboard())
 
 
 # /AI BUYRUG'I ORQALI TEZKOR MUROJAAT
@@ -679,11 +689,21 @@ async def handle_quick_gemini(message: types.Message):
         )
         return
     wait_msg = await message.answer("🧠 *Support AI o'ylamoqda...*", parse_mode="Markdown")
-    reply = await ai_service.ask_gemini_ai(query, user_id=message.from_user.id)
+    try:
+        reply = await asyncio.wait_for(
+            ai_service.ask_gemini_ai(query, user_id=message.from_user.id),
+            timeout=22.0
+        )
+    except asyncio.TimeoutError:
+        reply = "Kechirasiz, javob berish vaqti tugadi. Iltimos qaytadan urinib ko'ring."
+    except Exception:
+        reply = "Kechirasiz, xatolik yuz berdi."
+        
     try:
         await wait_msg.edit_text(f"🤖 **Support AI:**\n\n{reply}", parse_mode="Markdown")
     except Exception:
-        await wait_msg.edit_text(f"🤖 Support AI:\n\n{reply}")
+        safe_r = reply.replace("*", "").replace("_", " ").replace("`", "")
+        await wait_msg.edit_text(f"🤖 Support AI:\n\n{safe_r}")
 
 
 # RASM QABUL QILISH
