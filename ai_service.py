@@ -208,59 +208,104 @@ async def passport_3x4(input_path: str, output_path: str, wear_suit: bool = True
     return await loop.run_in_executor(None, _process_passport, input_path, output_path)
 
 
-# 7. GOOGLE GEMINI AI (24/7 SUPPORT & PHOTO CONSULTANT)
-async def ask_gemini_ai(prompt: str) -> str:
+# 7. GOOGLE GEMINI AI (UNIVERSAL INTELLIGENCE & 24/7 SUPPORT WITH MEMORY)
+user_ai_history = {}  # user_id -> list of {"role": "user"|"model", "parts": [{"text": ...}]}
+
+async def ask_gemini_ai(prompt: str, user_id: int = 0, reset_history: bool = False) -> str:
     api_key = os.getenv("GEMINI_API_KEY", "")
     if not api_key:
         return "Gemini API kaliti ulanmagan. Iltimos admin bilan bog'laning."
     import aiohttp
     
+    # 1. Foydalanuvchi suhbat xotirasi
+    if reset_history or user_id not in user_ai_history:
+        user_ai_history[user_id] = []
+        
+    history = user_ai_history[user_id]
+    history.append({
+        "role": "user",
+        "parts": [{"text": prompt}]
+    })
+    
+    # Oxirgi 10 ta xabarni (5 ta savol-javob) xotirada saqlash
+    if len(history) > 10:
+        history = history[-10:]
+        user_ai_history[user_id] = history
+
+    # 2. Universal, erkin va chuqur fikrlovchi haqiqiy AI ko'rsatmasi
     system_instruction = (
-        "Siz 'Xotira AI' (@xotira_ai_bot) fotostudiya botining rasmiy 24/7 aqlli yordamchisi (Support AI)siz.\n"
-        "Xotira AI boti quyidagi 6 ta asosiy xizmatni ko'rsatadi:\n"
-        "1. ✨ HD Tiniqlashtirish: Xira, sifatiz va eski suratlarni 4K tiniq holatga keltiradi.\n"
-        "2. 🎨 Rangli qilish: Tarixiy oq-qora suratlarga tabiiy, jonli ranglar beradi.\n"
-        "3. 🖼 Fonni o'chirish: Insonning kiyimi va sochlarini aslo kesmasdan, orqa fonni tozalab shaffof PNG stiker qiladi.\n"
-        "4. 👔 3x4 Pasport formati: Rasmiy hujjatlar uchun oppoq fon va avtomatik klassik kostyum-galstuk kiydirib, chop etishga tayyor 6 talik varaq qilib beradi.\n"
-        "5. 🎭 Anime & Art stili: Suratni komiks va anime san'at asariga aylantiradi.\n"
-        "6. 👀 Jonli harakat (GIF): Qotgan suratlarga harakat berib, jonli animatsiya yaratadi.\n\n"
-        "Qoidalar va Ma'lumotlar:\n"
-        "- Yangi a'zolarga telefon raqamini tasdiqlaganida 3 ta bepul urinish beriladi.\n"
-        "- Har bir taklif qilingan do'st uchun qo'shimcha +2 ta bepul urinish beriladi.\n"
-        "- Tariflar: 10 ta rasm (15 000 so'm), 30 ta rasm (35 000 so'm), 100 ta rasm (75 000 so'm).\n"
-        "- To'lovlar Click, Payme, Uzum Bank orqali qabul qilinadi va chek skrinshoti yuborilgach, admin tomonidan tezda tasdiqlanadi.\n\n"
-        "Vazifangiz: Foydalanuvchining savoliga o'zbek tilida juda muloyim, do'stona, tushunarli, aniq va professional javob berish. Chiroyli emojilardan me'yorida foydalaning."
+        "Siz erkin, nihoyatda bilimdon, har tomonlama chuqur fikrlovchi va samimiy haqiqiy Sun'iy Intellektsiz "
+        "(xuddi eng ilg'or Google Gemini / ChatGPT kabi).\n\n"
+        "ASOSIY QOIDALAR:\n"
+        "1. Foydalanuvchi sizdan nima so'rasa ham — xoh fan, matematika, fizika, tarix, axborot texnologiyalari, "
+        "dasturlash (Python, JS va h.k.), biznes, falsafa, psixologiya, hayotiy maslahat, xoh she'r, hikoya, hazil yoki "
+        "oddiy samimiy suhbat bo'lsin — barcha mavzularda to'liq, erkin, jonli va insoniy tarzda javob bering.\n"
+        "2. HECH QACHON qotib qolgan qolip, shablon yoki cheklangan avtomatik botga o'xshab javob bermang! "
+        "Har doim jonli, qiziqarli, mulohazali va yuqori intellektli suhbatdosh bo'ling.\n"
+        "3. Siz shuningdek 'Xotira AI' (@xotira_ai_bot) fotostudiyasida yordamchisiz. Agar foydalanuvchi aynan fotosuratlar, "
+        "ularni tahrirlash yoki bot xizmatlari haqida so'rasa, quyidagi barcha imkoniyatlar bo'yicha to'liq yordam bering:\n"
+        "   • ✨ 1. HD Tiniqlashtirish: Xira, sifatiz va eski suratlarni 4K tiniq holatga keltiradi.\n"
+        "   • 🎨 2. Rangli qilish: Tarixiy oq-qora suratlarga tabiiy, jonli ranglar beradi.\n"
+        "   • 🖼 3. Fonni o'chirish: Insonning kiyimi va sochlarini aslo kesmasdan, orqa fonni tozalab shaffof PNG stiker qiladi.\n"
+        "   • 👔 4. 3x4 Pasport formati: Rasmiy hujjatlar uchun oppoq fon va avtomatik klassik kostyum-galstuk kiydirib, chop etishga tayyor 6 talik varaq qilib beradi.\n"
+        "   • 🎭 5. Anime & Art stili: Suratni komiks va anime san'at asariga aylantiradi.\n"
+        "   • 👀 6. Jonli harakat (GIF): Qotgan suratlarga harakat berib, jonli animatsiya yaratadi.\n"
+        "   • Bot ma'lumotlari: Ro'yxatdan o'tganda 3 ta bepul urinish beriladi. Do'stlarni taklif qilsa har biriga +2 ta urinish. "
+        "Tariflar: 10 ta rasm (15 000 so'm), 30 ta rasm (35 000 so'm), 100 ta rasm (75 000 so'm). To'lovlar Click, Payme, Uzum Bank orqali qabul qilinadi.\n"
+        "4. Muloqot tili: Asosan o'zbek tili. Agar foydalanuvchi rus, ingliz yoki boshqa tilda yozsa, o'sha tilda ham erkin javob bering.\n"
+        "Har doim foydalanuvchiga do'stona, yuqori intellekt bilan va erkin yordam bering!"
     )
     
-    models = ["gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemini-flash-latest"]
+    models = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest"]
     
     payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": f"{system_instruction}\n\nFoydalanuvchi savoli: {prompt}"}
-                ]
-            }
-        ]
+        "systemInstruction": {
+            "parts": [{"text": system_instruction}]
+        },
+        "contents": history
     }
     
-    for model_name in models:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        candidates = data.get("candidates", [])
-                        if candidates:
-                            parts = candidates[0].get("content", {}).get("parts", [])
-                            if parts:
-                                return parts[0].get("text", "")
-        except Exception as e:
-            logger.warning(f"Model {model_name} xatolik: {e}, keyingi modelga o'tilmoqda...")
-            continue
+    reply_text = ""
+    for attempt in range(2):
+        for model_name in models:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=25)) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            candidates = data.get("candidates", [])
+                            if candidates:
+                                parts = candidates[0].get("content", {}).get("parts", [])
+                                if parts:
+                                    reply_text = "".join(p.get("text", "") for p in parts if "text" in p).strip()
+                                    if reply_text:
+                                        break
+                        elif resp.status == 503:
+                            logger.warning(f"Gemini {model_name} HTTP 503 (vaqtincha band), 1.2 soniya kutilmoqda...")
+                            await asyncio.sleep(1.2)
+                            continue
+                        else:
+                            err_text = await resp.text()
+                            logger.warning(f"Gemini {model_name} HTTP {resp.status}: {err_text[:120]}")
+            except Exception as e:
+                logger.warning(f"Model {model_name} xatolik: {e}, keyingi modelga o'tilmoqda...")
+                continue
+        if reply_text:
+            break
             
-    return "Hozirda barcha AI modellar band. Iltimos, birozdan so'ng qayta urinib ko'ring yoki /start bosing."
+    if reply_text:
+        history.append({
+            "role": "model",
+            "parts": [{"text": reply_text}]
+        })
+        return reply_text
+    else:
+        # Xatolik yuz berganda xotira buzilmasligi uchun oxirgi user xabarini chiqarib tashlash
+        if history and history[-1].get("role") == "user":
+            history.pop()
+        
+    return "Hozirda AI modellar band. Iltimos, birozdan so'ng qayta urinib ko'ring yoki /start bosing."
 
 
 # 5. ANIME / ART / KOMIKS STILI (CARTOONIZE)
