@@ -48,7 +48,7 @@ async def enhance_image(input_path: str, output_path: str) -> str:
         
         loop = asyncio.get_running_loop()
         def _call_gradio():
-            client = Client("TencentARC/GFPGAN", timeout=20)
+            client = Client("TencentARC/GFPGAN")
             result = client.predict(
                 img=handle_file(input_path),
                 version="v1.4",
@@ -110,7 +110,7 @@ async def colorize_image(input_path: str, output_path: str) -> str:
         from gradio_client import Client, handle_file
         loop = asyncio.get_running_loop()
         def _call_colorize():
-            client = Client("ariG23498/deoldify", timeout=20)
+            client = Client("ariG23498/deoldify")
             result = client.predict(
                 image=handle_file(input_path),
                 render_factor=35,
