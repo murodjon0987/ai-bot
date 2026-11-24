@@ -35,10 +35,8 @@ dp = Dispatcher()
 TEMP_DIR = os.path.join(os.path.dirname(__file__), "temp_photos")
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-# Foydalanuvchilarning oxirgi yuborgan rasmini saqlash
 user_pending_photos = {}
 
-# Asosiy klaviatura
 def get_main_keyboard():
     kb = [
         [KeyboardButton(text="📸 Rasm yuborish")],
@@ -47,11 +45,20 @@ def get_main_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-# Amallar tanlovi (Inline)
 def get_action_keyboard(photo_id: str):
     kb = [
-        [InlineKeyboardButton(text="✨ HD Tiniqlashtirish", callback_data=f"enhance:{photo_id}")],
-        [InlineKeyboardButton(text="🎨 Rangli qilish (Colorize)", callback_data=f"colorize:{photo_id}")]
+        [
+            InlineKeyboardButton(text="✨ HD Tiniqlashtirish", callback_data=f"enhance:{photo_id}"),
+            InlineKeyboardButton(text="🎨 Rangli qilish", callback_data=f"colorize:{photo_id}")
+        ],
+        [
+            InlineKeyboardButton(text="🖼 Fonni o'chirish (PNG)", callback_data=f"remove_bg:{photo_id}"),
+            InlineKeyboardButton(text="👔 3x4 Hujjatga rasm", callback_data=f"passport:{photo_id}")
+        ],
+        [
+            InlineKeyboardButton(text="🎭 Anime / Art stili", callback_data=f"cartoon:{photo_id}"),
+            InlineKeyboardButton(text="👀 Jonli harakat (GIF)", callback_data=f"animate:{photo_id}")
+        ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
@@ -62,7 +69,6 @@ async def cmd_start(message: types.Message, command: CommandObject):
     username = message.from_user.username
     full_name = message.from_user.full_name
     
-    # Referal parametrini tekshirish (/start ref_12345678)
     referrer_id = None
     if command.args and command.args.startswith("ref_"):
         try:
@@ -72,25 +78,28 @@ async def cmd_start(message: types.Message, command: CommandObject):
 
     user = await db.get_or_create_user(user_id, username, full_name, referrer_id)
     
-    # Agar yangi bo'lsa va taklif qilgan odam bo'lsa, xabar berish
     if user["is_new"] and user["referred_by"]:
         try:
             await bot.send_message(
                 user["referred_by"],
                 f"🎉 Tabriklaymiz! Sizning taklif havolangiz orqali yangi do'stingiz (@{username or full_name}) qo'shildi!\n"
-                f"🎁 Sizga **+2 ta bepul rasm tiklash imkoniyati** qo'shildi!"
+                f"🎁 Sizga **+2 ta bepul urinish** qo'shildi!"
             )
         except Exception:
             pass
 
     welcome_text = (
         f"Assalomu alaykum, **{full_name}**! 👋\n\n"
-        f"Men **Jonli Xotira AI** (@{BOT_USERNAME}) botiman.\n\n"
-        f"🌟 **Mening imkoniyatlarim:**\n"
-        f"✨ Eski, xira, yuzlari ko'rinmaydigan suratlarni **HD sifatda tiniqlashtirish**\n"
-        f"🎨 Oq-qora suratlarga **tabiiy rang berish**\n\n"
+        f"Men **Jonli Xotira AI** (@{BOT_USERNAME}) ko'p funksiyali sun'iy intellekt boti bo'laman!\n\n"
+        f"🌟 **Mening barcha imkoniyatlarim:**\n"
+        f"✨ **HD Tiniqlashtirish** — Eski va xira yuzlarni o'ta aniq qilish\n"
+        f"🎨 **Rangli qilish** — Oq-qora suratlarga jonli rang berish\n"
+        f"🖼 **Fonni o'chirish** — Orqa fonni tozalab, tiniq PNG/stiker qilish\n"
+        f"👔 **3x4 Hujjatga rasm** — Pasport va hujjatlar uchun 6 talik tayyor varaq\n"
+        f"🎭 **Anime / Art stili** — Rasmingizni komiks/multfilm qahramoniga aylantirish\n"
+        f"👀 **Jonli harakat** — Suratni nafas oluvchi jonli GIF animatsiya qilish\n\n"
         f"🎁 Sizda hozir **{user['credits']} ta bepul urinish** mavjud!\n\n"
-        f"👉 Sinab ko'rish uchun hoziroq menga birorta **eski yoki xira rasm yuboring**!"
+        f"👉 Sinab ko'rish uchun menga **birorta rasm yuboring**!"
     )
     await message.answer(welcome_text, reply_markup=get_main_keyboard(), parse_mode="Markdown")
 
@@ -98,8 +107,8 @@ async def cmd_start(message: types.Message, command: CommandObject):
 @dp.message(F.text == "📸 Rasm yuborish")
 async def btn_send_photo(message: types.Message):
     await message.answer(
-        "📷 Iltimos, menga tiklamoqchi bo'lgan **eski yoki xira suratingizni yuboring**!\n\n"
-        "💡 *Maslahat: Rasmni oddiy rasm yoki sifatini yo'qotmaslik uchun fayl (document) sifatida ham yuborishingiz mumkin.*",
+        "📷 Menga istalgan suratingizni yuboring (oddiy rasm yoki fayl ko'rinishida).\n"
+        "Keyin esa 6 xil sehrli AI amalidan birini tanlaysiz!",
         parse_mode="Markdown"
     )
 
@@ -116,9 +125,9 @@ async def btn_profile(message: types.Message):
         f"👤 **Sizning profilingiz:**\n\n"
         f"🆔 ID: `{message.from_user.id}`\n"
         f"⚡️ Qolgan bepul urinishlar: **{user['credits']} ta**\n"
-        f"🖼 Tiklangan rasmlaringiz: **{user['total_restored']} ta**\n"
+        f"🖼 Ishlov berilgan jami rasmlar: **{user['total_restored']} ta**\n"
         f"👥 Taklif qilgan do'stlaringiz: **{ref_count} ta**\n\n"
-        f"🎁 *Ko'proq rasm tiklashni xohlaysizmi? Do'stlaringizni taklif qiling va har bir do'stingiz uchun +2 ta urinish oling!*"
+        f"🎁 *Urinishlar tugasa, do'stlaringizni taklif qilib, har bir do'stingiz uchun +2 tadan bepul urinish olishingiz mumkin!*"
     )
     await message.answer(text, parse_mode="Markdown")
 
@@ -130,17 +139,17 @@ async def btn_invite(message: types.Message):
     
     text = (
         f"👥 **Do'stlaringizni taklif qiling va bepul urinishlar oling!**\n\n"
-        f"Har bir taklif qilgan do'stingiz botga kirganda, sizga **+2 ta bepul rasm tiklash** imkoniyati beriladi!\n\n"
+        f"Har bir taklif qilgan do'stingiz botga kirganda, sizga **+2 ta bepul urinish** beriladi!\n\n"
         f"🔗 **Sizning shaxsiy taklif havolangiz:**\n"
         f"`{ref_link}`\n\n"
         f"📊 Hozirgacha taklif qilingan: **{ref_count} kishi**\n\n"
-        f"👇 Quyidagi tugma orqali havolani do'stlaringiz va guruhlarga yuborishingiz mumkin:"
+        f"👇 Havolani do'stlaringiz va guruhlarga yuboring:"
     )
     
     share_kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
             text="📲 Do'stlarga ulashish",
-            url=f"https://t.me/share/url?url={ref_link}&text=Ota-bobolaringizning%20eski%20suratlarini%20HD%20tiniq%20qilib%20beruvchi%20zo'r%20AI%20bot!"
+            url=f"https://t.me/share/url?url={ref_link}&text=Rasmlarni%20HD%20tiniqlashtiruvchi,%20rangli%20qiluvchi%20va%20fonini%20o'chiruvchi%20universal%20AI%20bot!"
         )]
     ])
     await message.answer(text, reply_markup=share_kb, parse_mode="Markdown")
@@ -150,17 +159,21 @@ async def btn_invite(message: types.Message):
 async def btn_about(message: types.Message):
     stats = await db.get_stats()
     text = (
-        f"ℹ️ **Jonli Xotira AI haqida:**\n\n"
-        f"Ushbu bot eng zamonaviy sun'iy intellekt (GFPGAN & DeOldify) modellari orqali eski suratlarni qayta tiklash uchun yaratilgan.\n\n"
+        f"ℹ️ **Jonli Xotira AI — Universal foto yordamchi**\n\n"
+        f"Bot quyidagi 6 ta AI xizmatini o'z ichiga oladi:\n"
+        f"1. ✨ HD Tiniqlashtirish\n"
+        f"2. 🎨 Rangli qilish\n"
+        f"3. 🖼 Fonni tozalash (Stiker yasash)\n"
+        f"4. 👔 3x4 Pasport formati (Chop etishga tayyor 6 talik varaq)\n"
+        f"5. 🎭 Anime va Komiks Art effekti\n"
+        f"6. 👀 Jonli harakat (Animatsiya GIF)\n\n"
         f"📊 **Statistika:**\n"
         f"👥 Foydalanuvchilar: **{stats['total_users']} kishi**\n"
-        f"📸 Tiklangan jami rasmlar: **{stats['total_restored']} ta**\n\n"
-        f"Savollar yoki takliflar bo'lsa, adminga murojaat qilishingiz mumkin."
+        f"📸 Ishlov berilgan rasmlar: **{stats['total_restored']} ta**"
     )
     await message.answer(text, parse_mode="Markdown")
 
 
-# Rasm qabul qilish (Photo yoki Document)
 @dp.message(F.photo | F.document)
 async def handle_photo(message: types.Message):
     user_id = message.from_user.id
@@ -172,14 +185,13 @@ async def handle_photo(message: types.Message):
         ref_link = f"https://t.me/{BOT_USERNAME}?start=ref_{user_id}"
         await message.answer(
             "😔 **Kechirasiz, sizda bepul urinishlar tugadi!**\n\n"
-            "Yana bepul rasm tiklash uchun o'z havolangizni do'stlaringizga yuboring:\n"
+            "Yana bepul foydalanish uchun o'z havolangizni do'stlaringizga yuboring:\n"
             f"`{ref_link}`\n\n"
             "Har bir taklif qilingan do'stingiz uchun **+2 ta urinish** olasiz! 🎁",
             parse_mode="Markdown"
         )
         return
 
-    # Faylni yuklab olish
     status_msg = await message.answer("⏳ Surat qabul qilinmoqda...")
     
     file_id = None
@@ -197,18 +209,25 @@ async def handle_photo(message: types.Message):
     input_path = os.path.join(TEMP_DIR, local_filename)
 
     await bot.download_file(file.file_path, input_path)
-    
     user_pending_photos[str(message.message_id)] = input_path
 
     await status_msg.delete()
     await message.answer(
-        "Suratingiz qabul qilindi! Endi unga qanday ishlov berishni xohlaysiz? 👇",
+        "Suratingiz qabul qilindi! Nima qilishni xohlaysiz? Quyidagi 6 ta amaldan birini tanlang 👇",
         reply_markup=get_action_keyboard(str(message.message_id))
     )
 
 
-# Callback tugmalarini qayta ishlash
-@dp.callback_query(F.data.startswith("enhance:") | F.data.startswith("colorize:"))
+ACTION_NAMES = {
+    "enhance": "✨ HD Tiniqlashtirish",
+    "colorize": "🎨 Rangli qilish",
+    "remove_bg": "🖼 Fonni o'chirish (PNG)",
+    "passport": "👔 3x4 Hujjatga rasm",
+    "cartoon": "🎭 Anime / Art stili",
+    "animate": "👀 Jonli harakat (GIF)"
+}
+
+@dp.callback_query(F.data.func(lambda d: any(d.startswith(f"{k}:") for k in ACTION_NAMES.keys())))
 async def process_photo_action(callback: types.CallbackQuery):
     action, photo_id = callback.data.split(":")
     input_path = user_pending_photos.get(photo_id)
@@ -223,50 +242,76 @@ async def process_photo_action(callback: types.CallbackQuery):
         await callback.answer("Urinishlaringiz tugagan!", show_alert=True)
         return
 
-    action_name = "HD Tiniqlashtirish" if action == "enhance" else "Rangli qilish"
+    action_label = ACTION_NAMES.get(action, "Ishlov berish")
     await callback.message.edit_text(
         f"⏳ **Sun'iy intellekt ishlamoqda...**\n\n"
-        f"Tanlangan amal: *{action_name}*\n"
-        f"Bu jarayon 5-15 soniya vaqt olishi mumkin, iltimos kuting...",
+        f"Amal: *{action_label}*\n"
+        f"Iltimos, bir necha soniya kuting...",
         parse_mode="Markdown"
     )
 
-    output_filename = f"result_{action}_{os.path.basename(input_path)}"
+    ext = ".png" if action == "remove_bg" else (".gif" if action == "animate" else ".jpg")
+    output_filename = f"result_{action}_{photo_id}{ext}"
     output_path = os.path.join(TEMP_DIR, output_filename)
 
     try:
         if action == "enhance":
             await ai_service.enhance_image(input_path, output_path)
-        else:
+        elif action == "colorize":
             await ai_service.colorize_image(input_path, output_path)
+        elif action == "remove_bg":
+            await ai_service.remove_bg(input_path, output_path)
+        elif action == "passport":
+            await ai_service.passport_3x4(input_path, output_path)
+        elif action == "cartoon":
+            await ai_service.cartoonize_image(input_path, output_path)
+        elif action == "animate":
+            await ai_service.animate_motion(input_path, output_path)
 
         user = await db.get_user(user_id)
         caption = (
-            f"✅ **Suratingiz muvaffaqiyatli tiklandi!**\n\n"
-            f"⚙️ Ishlov turi: *{action_name}*\n"
+            f"✅ **Tayyor bo'ldi!**\n\n"
+            f"⚙️ Amal: *{action_label}*\n"
             f"⚡️ Qolgan bepul balansingiz: **{user['credits']} ta**\n\n"
             f"Do'stlaringizga ham ulashing: @{BOT_USERNAME}"
         )
         
         await callback.message.delete()
-        await bot.send_photo(
-            chat_id=user_id,
-            photo=FSInputFile(output_path),
-            caption=caption,
-            parse_mode="Markdown",
-            reply_markup=get_main_keyboard()
-        )
+        
+        if action == "animate":
+            await bot.send_animation(
+                chat_id=user_id,
+                animation=FSInputFile(output_path),
+                caption=caption,
+                parse_mode="Markdown",
+                reply_markup=get_main_keyboard()
+            )
+        elif action == "remove_bg":
+            # Transparent PNG fayl sifatini yo'qotmaslik uchun hujjat sifatida yuborish
+            await bot.send_document(
+                chat_id=user_id,
+                document=FSInputFile(output_path),
+                caption=caption,
+                parse_mode="Markdown",
+                reply_markup=get_main_keyboard()
+            )
+        else:
+            await bot.send_photo(
+                chat_id=user_id,
+                photo=FSInputFile(output_path),
+                caption=caption,
+                parse_mode="Markdown",
+                reply_markup=get_main_keyboard()
+            )
 
     except Exception as e:
-        logger.error(f"Xatolik rasm qayta ishlashda: {e}")
-        # Urinishni qaytarib berish
+        logger.error(f"Xatolik rasm qayta ishlashda ({action}): {e}")
         await db.add_credits(user_id, 1)
         await callback.message.answer(
-            "😔 Kechirasiz, suratga ishlov berishda xatolik yuz berdi. Urinishingiz balansingizga qaytarildi. Iltimos, boshqa surat yuborib ko'ring."
+            f"😔 Kechirasiz, suratga ishlov berishda xatolik yuz berdi. Urinishingiz balansingizga qaytarildi."
         )
 
     finally:
-        # Tozalash
         if os.path.exists(input_path):
             try:
                 os.remove(input_path)
@@ -280,7 +325,6 @@ async def process_photo_action(callback: types.CallbackQuery):
         user_pending_photos.pop(photo_id, None)
 
 
-# Render.com keepalive veb-serveri
 async def handle_ping(request):
     return web.Response(text="Bot is alive and running!")
 
@@ -296,12 +340,8 @@ async def start_web_server():
 
 
 async def main():
-    logger.info("Ma'lumotlar bazasi initsializatsiya qilinmoqda...")
     await db.init_db()
-    
-    logger.info("Web-server ishga tushirilmoqda...")
     await start_web_server()
-
     logger.info(f"Bot @{BOT_USERNAME} polling rejimida ishga tushdi!")
     await dp.start_polling(bot, skip_updates=True)
 

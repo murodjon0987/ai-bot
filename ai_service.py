@@ -1,51 +1,35 @@
 import asyncio
 import logging
 import os
+import cv2
+import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 logger = logging.getLogger(__name__)
 
+# 1. HD TINIQLASHTIRISH (ENHANCE)
 async def enhance_image(input_path: str, output_path: str) -> str:
-    """
-    Eski va xira rasmni HD sifatga keltiradi.
-    1-navbatda HuggingFace GFPGAN / neyrotarmog'iga ulanadi.
-    Agar ulanish sekin yoki band bo'lsa, avtomatik yuqori sifatli algoritmik filtrlar bilan ishlaydi.
-    """
     def _process_local(inp, out):
         with Image.open(inp) as img:
             img = img.convert("RGB")
-            
-            # Kichik rasmlarni kattalashtirish (Super-Resolution simulyatsiyasi)
             w, h = img.size
-            if max(w, h) < 1600:
-                scale = min(2.5, 1800 / max(w, h))
-                new_w, new_h = int(w * scale), int(h * scale)
-                img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            if max(w, h) < 1800:
+                scale = min(2.5, 2000 / max(w, h))
+                img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
             
-            # 1. Shovqinni kamaytirish va chetlarni tekislash
             img = img.filter(ImageFilter.SMOOTH_MORE)
-            
-            # 2. Unsharp Mask orqali yuz va chiziqlarni kuchli tiniqlashtirish
-            img = img.filter(ImageFilter.UnsharpMask(radius=2.5, percent=180, threshold=3))
+            img = img.filter(ImageFilter.UnsharpMask(radius=2.5, percent=190, threshold=3))
             img = img.filter(ImageFilter.DETAIL)
             
-            # 3. Kontrast va aniqlikni ko'tarish
-            contrast = ImageEnhance.Contrast(img)
-            img = contrast.enhance(1.25)
-            
-            sharpness = ImageEnhance.Sharpness(img)
-            img = sharpness.enhance(1.4)
-            
-            brightness = ImageEnhance.Brightness(img)
-            img = brightness.enhance(1.05)
+            img = ImageEnhance.Contrast(img).enhance(1.25)
+            img = ImageEnhance.Sharpness(img).enhance(1.4)
+            img = ImageEnhance.Brightness(img).enhance(1.04)
             
             img.save(out, "JPEG", quality=95, optimize=True)
             return out
 
-    # Onlayn AI sinab ko'rish (Hugging Face / Gradio)
     try:
         from gradio_client import Client, handle_file
-        
         loop = asyncio.get_running_loop()
         def _call_gradio():
             client = Client("TencentARC/GFPGAN")
@@ -65,47 +49,31 @@ async def enhance_image(input_path: str, output_path: str) -> str:
         if res and os.path.exists(res):
             return res
     except Exception as e:
-        logger.warning(f"Onlayn GFPGAN AI ulanishida kutish/xatolik ({e}), lokal yuqori sifatli ishlov berish ishlatildi.")
+        logger.warning(f"Onlayn GFPGAN AI: ({e}), lokal algoritm ishlatildi.")
 
-    # Lokal filtr bilan yakunlash
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _process_local, input_path, output_path)
 
 
+# 2. RANGLI QILISH (COLORIZE)
 async def colorize_image(input_path: str, output_path: str) -> str:
-    """
-    Oq-qora rasmni rangli holatga keltiradi.
-    """
     def _process_colorize_local(inp, out):
         with Image.open(inp) as img:
             img = img.convert("RGB")
-            
-            # Kattalashtirish va tiniqlashtirish
             w, h = img.size
             if max(w, h) < 1600:
                 scale = min(2.0, 1600 / max(w, h))
                 img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
                 
             img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=2))
-            
-            # Tabiiy issiq rangli ohang berish (Warm sepia/vintage skin toning)
             gray = ImageOps.grayscale(img)
-            # Issiq rangli palitrani hosil qilish
-            colorized = ImageOps.colorize(gray, black="#1b120c", mid="#b88358", white="#fff4e6")
-            
-            # Asl tasvir bilan tabiiy uyg'unlashtirish
+            colorized = ImageOps.colorize(gray, black="#1a110a", mid="#b88358", white="#fff4e6")
             final = Image.blend(img, colorized, alpha=0.65)
-            
-            color_enhancer = ImageEnhance.Color(final)
-            final = color_enhancer.enhance(1.4)
-            
-            contrast = ImageEnhance.Contrast(final)
-            final = contrast.enhance(1.15)
-            
+            final = ImageEnhance.Color(final).enhance(1.45)
+            final = ImageEnhance.Contrast(final).enhance(1.15)
             final.save(out, "JPEG", quality=95, optimize=True)
             return out
 
-    # Onlayn AI sinab ko'rish
     try:
         from gradio_client import Client, handle_file
         loop = asyncio.get_running_loop()
@@ -126,7 +94,177 @@ async def colorize_image(input_path: str, output_path: str) -> str:
         if res and os.path.exists(res):
             return res
     except Exception as e:
-        logger.warning(f"Onlayn Colorize AI ulanishida kutish/xatolik ({e}), lokal algoritmik rang berish ishlatildi.")
+        logger.warning(f"Onlayn Colorize AI: ({e}), lokal algoritm ishlatildi.")
 
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _process_colorize_local, input_path, output_path)
+
+
+# 3. FONNI O'CHIRISH (REMOVE BACKGROUND / PNG STICKER)
+async def remove_bg(input_path: str, output_path: str) -> str:
+    def _process_remove_bg(inp, out):
+        # OpenCV GrabCut + Threshold yordamida orqa fonni ajratish
+        cv_img = cv2.imread(inp)
+        if cv_img is None:
+            raise ValueError("Rasm o'qilmadi")
+            
+        h, w = cv_img.shape[:2]
+        mask = np.zeros((h, w), np.uint8)
+        bgd_model = np.zeros((1, 65), np.float64)
+        fgd_model = np.zeros((1, 65), np.float64)
+        
+        # Asosiy ob'ekt markazda joylashgan degan taxmin bilan chegaralash
+        rect = (int(w * 0.05), int(h * 0.05), int(w * 0.9), int(h * 0.9))
+        cv2.grabCut(cv_img, mask, rect, bgd_model, fgd_model, 4, cv2.GC_INIT_WITH_RECT)
+        
+        mask2 = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
+        # Yumshoq chekkalar (anti-aliasing)
+        mask_blurred = cv2.GaussianBlur(mask2 * 255, (7, 7), 0)
+        
+        # RGBA formatiga o'tkazish
+        b, g, r = cv2.split(cv_img)
+        rgba = [b, g, r, mask_blurred]
+        dst = cv2.merge(rgba, 4)
+        
+        cv2.imwrite(out, dst)
+        return out
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _process_remove_bg, input_path, output_path)
+
+
+# 4. 3x4 HUJJATGA RASM (PASSPORT 3x4 + 6 TALIK QOG'OZ)
+async def passport_3x4(input_path: str, output_path: str) -> str:
+    def _process_passport(inp, out):
+        with Image.open(inp) as img:
+            img = img.convert("RGB")
+            w, h = img.size
+            
+            # 3x4 proporsiyasida markaziy qirqish
+            target_aspect = 3.0 / 4.0
+            current_aspect = w / h
+            
+            if current_aspect > target_aspect:
+                new_w = int(h * target_aspect)
+                left = (w - new_w) // 2
+                img = img.crop((left, 0, left + new_w, h))
+            else:
+                new_h = int(w / target_aspect)
+                # Yuz teparoqda bo'lgani uchun yuqoridan ko'proq joy qoldirish
+                top = int((h - new_h) * 0.25)
+                img = img.crop((0, top, w, top + new_h))
+            
+            # Standart 3x4 piksel o'lchami (600x800)
+            single = img.resize((600, 800), Image.Resampling.LANCZOS)
+            # Tiniqlashtirish va yorug'likni rasmiy formatga moslash
+            single = ImageEnhance.Sharpness(single).enhance(1.3)
+            single = ImageEnhance.Contrast(single).enhance(1.1)
+            
+            # 6 talik bosma qog'oz varag'i (10x15 sm foto qog'oz)
+            sheet = Image.new("RGB", (1800, 1200), color="#ffffff")
+            
+            # Kichik o'lchamda 6 ta rasmni joylashtirish (3 qator, 2 ustun yoki 2 qator 3 ustun)
+            thumb = single.resize((500, 666), Image.Resampling.LANCZOS)
+            # Rasmiy oq hoshiya
+            thumb = ImageOps.expand(thumb, border=4, fill="#e0e0e0")
+            
+            positions = [
+                (70, 70), (620, 70), (1170, 70),
+                (70, 770), (620, 770), (1170, 770)
+            ]
+            
+            # 6 ta rasmni varaqqa chizish
+            for pos in [(80, 50), (640, 50), (1200, 50), (80, 730), (640, 730), (1200, 730)]:
+                sheet.paste(thumb.resize((480, 640)), pos)
+            
+            sheet.save(out, "JPEG", quality=95)
+            return out
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _process_passport, input_path, output_path)
+
+
+# 5. ANIME / ART / KOMIKS STILI (CARTOONIZE)
+async def cartoonize_image(input_path: str, output_path: str) -> str:
+    def _process_cartoon(inp, out):
+        cv_img = cv2.imread(inp)
+        if cv_img is None:
+            raise ValueError("Rasm o'qilmadi")
+            
+        # O'lchamni optimallashtirish
+        h, w = cv_img.shape[:2]
+        if max(h, w) > 1200:
+            scale = 1200 / max(h, w)
+            cv_img = cv2.resize(cv_img, (int(w * scale), int(h * scale)))
+            
+        # 1. Chegaralarni (qora konturlarni) aniqlash
+        gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+        gray = cv2.medianBlur(gray, 5)
+        edges = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 9, 9
+        )
+        
+        # 2. Ranglarni yumshatish (Bilateral filter orqali akvarel/anime effekti)
+        color = cv2.bilateralFilter(cv_img, d=9, sigmaColor=250, sigmaSpace=250)
+        
+        # 3. Rang va konturni birlashtirish
+        cartoon = cv2.bitwise_and(color, color, mask=edges)
+        
+        # 4. Rang to'yinganligini oshirish
+        pil_img = Image.fromarray(cv2.cvtColor(cartoon, cv2.COLOR_BGR2RGB))
+        pil_img = ImageEnhance.Color(pil_img).enhance(1.5)
+        pil_img = ImageEnhance.Contrast(pil_img).enhance(1.2)
+        
+        pil_img.save(out, "JPEG", quality=95)
+        return out
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _process_cartoon, input_path, output_path)
+
+
+# 6. JONLI HARAKAT (LIVE MOTION ANIMATED GIF)
+async def animate_motion(input_path: str, output_path: str) -> str:
+    def _process_animation(inp, out):
+        with Image.open(inp) as base_img:
+            base_img = base_img.convert("RGB")
+            # Kvadrat yoki ixcham o'lchamga keltirish
+            w, h = base_img.size
+            if max(w, h) > 800:
+                scale = 800 / max(w, h)
+                base_img = base_img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
+                
+            w, h = base_img.size
+            frames = []
+            
+            # Sekin yaqinlashish (Zoom-in) va nafas olish (breathing) effekti kadrlarini yaratish
+            num_frames = 14
+            for i in range(num_frames):
+                # 0 dan 1 gacha sinusoid tebranish
+                t = (1 - np.cos(i / num_frames * 2 * np.pi)) / 2
+                zoom_factor = 1.0 + (t * 0.06) # 6% zoom
+                
+                crop_w = int(w / zoom_factor)
+                crop_h = int(h / zoom_factor)
+                left = (w - crop_w) // 2
+                top = (h - crop_h) // 2
+                
+                cropped = base_img.crop((left, top, left + crop_w, top + crop_h))
+                frame = cropped.resize((w, h), Image.Resampling.BILINEAR)
+                
+                # Yengil yorug'lik pulsi (hayotiy jilo)
+                bright = 1.0 + (t * 0.05)
+                frame = ImageEnhance.Brightness(frame).enhance(bright)
+                frames.append(frame)
+                
+            frames[0].save(
+                out,
+                save_all=True,
+                append_images=frames[1:],
+                optimize=True,
+                duration=100,
+                loop=0
+            )
+            return out
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _process_animation, input_path, output_path)
