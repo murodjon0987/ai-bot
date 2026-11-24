@@ -54,10 +54,18 @@ def get_main_keyboard(is_admin: bool = False):
     kb = [
         [KeyboardButton(text="📸 Rasm yuborish")],
         [KeyboardButton(text="💳 Tariflar va Balans to'ldirish"), KeyboardButton(text="👤 Profilim / Balans")],
-        [KeyboardButton(text="👥 Do'stlarni taklif qilish (+2)"), KeyboardButton(text="ℹ️ Bot haqida")]
+        [KeyboardButton(text="🤖 Support AI (Yordamchi)"), KeyboardButton(text="👥 Do'stlarni taklif qilish (+2)")],
+        [KeyboardButton(text="ℹ️ Bot haqida")]
     ]
     if is_admin:
         kb.append([KeyboardButton(text="⚙️ Admin Panel")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+# SUPPORT AI KLAVIATURASI
+def get_support_keyboard():
+    kb = [
+        [KeyboardButton(text="⬅️ Asosiy menyu")]
+    ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 # 3. 6 XIL AI AMALLARI (INLINE)
@@ -572,20 +580,71 @@ async def btn_send_photo(message: types.Message):
     )
 
 
-# GEMINI AI BILAN SUHBAT / MASLAHAT
-@dp.message(F.text.startswith("/ai") | F.text.startswith("🤖") | F.text.startswith("/gemini"))
-async def handle_gemini_query(message: types.Message):
-    query = message.text.replace("/ai", "").replace("🤖", "").replace("/gemini", "").strip()
+# 🤖 24/7 SUPPORT AI (AQLLI YORDAMCHI BO'LIMI)
+@dp.message(F.text.in_(["🤖 Support AI (Yordamchi)", "🤖 Support AI", "/support", "🤖 AI Yordamchi"]))
+async def btn_support_ai(message: types.Message, state: FSMContext):
+    user = await db.get_user(message.from_user.id)
+    if not await ensure_phone_verified(message, user):
+        return
+
+    await state.set_state(UserStates.waiting_for_ai_support)
+    text = (
+        "🤖 **Xotira AI — 24/7 Aqlli Yordamchi (Support AI)**\n\n"
+        "Assalomu alaykum! Men botimizning rasmiy sun'iy intellekt konsultantiman.\n\n"
+        "💬 **Mendan xohlagan savolingizni so'rashingiz mumkin:**\n"
+        "• *«Rasmlarni qanday tiniqlashtiraman?»*\n"
+        "• *«Balansni to'ldirish qanday bo'ladi?»*\n"
+        "• *«3x4 pasportga qanday kostyum kiydiriladi?»*\n"
+        "• *«Orqa fon qanday tozalab beriladi?»*\n"
+        "• *«Eski suratlarni qanday sifatli tiklasa bo'ladi?»*\n\n"
+        "✍️ **Savolingizni quyida yozib yuboring:**\n"
+        "*(Chiqish uchun pastdagi '⬅️ Asosiy menyu' tugmasini bosing)*"
+    )
+    await message.answer(text, reply_markup=get_support_keyboard(), parse_mode="Markdown")
+
+
+# SUPPORT AI BILAN SAVOL-JAVOB JARAYONI
+@dp.message(UserStates.waiting_for_ai_support)
+async def process_ai_support_chat(message: types.Message, state: FSMContext):
+    if message.text in ["⬅️ Asosiy menyu", "⬅️ Asosiy menyuga qaytish", "/cancel", "/start"]:
+        await state.clear()
+        user = await db.get_user(message.from_user.id)
+        await message.answer(
+            "Asosiy menyuga qaytdingiz. Biror xizmatni tanlang:",
+            reply_markup=get_main_keyboard(user.get("is_admin") if user else False)
+        )
+        return
+
+    if not message.text:
+        await message.answer("Iltimos, savolingizni matn ko'rinishida yozing.")
+        return
+
+    wait_msg = await message.answer("🧠 *Support AI tahlil qilmoqda...*", parse_mode="Markdown")
+    reply = await ai_service.ask_gemini_ai(message.text)
+    
+    reply_text = (
+        f"🤖 **Support AI:**\n\n"
+        f"{reply}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"💡 *Yana biror savolingiz bormi? Bemalol yozishingiz mumkin:*"
+    )
+    await wait_msg.edit_text(reply_text, reply_markup=get_support_keyboard())
+
+
+# /AI BUYRUG'I ORQALI TEZKOR MUROJAAT
+@dp.message(F.text.startswith("/ai") | F.text.startswith("/gemini"))
+async def handle_quick_gemini(message: types.Message):
+    query = message.text.replace("/ai", "").replace("/gemini", "").strip()
     if not query:
         await message.answer(
-            "🤖 **Gemini AI:** Fotosuratlar, ranglar yoki dizayn bo'yicha istalgan savolingizni yozing!\n"
-            "Masalan: `/ai Qadimgi oq-qora suratlarni sifatli skaner qilish sirlari`",
+            "🤖 **Support AI:** Savolingizni `/ai Savol` ko'rinishida yozing.\n"
+            "Masalan: `/ai Rasmlarni qanday tiniqlashtiraman?`",
             parse_mode="Markdown"
         )
         return
-    wait_msg = await message.answer("🧠 *Gemini AI tahlil qilmoqda...*", parse_mode="Markdown")
+    wait_msg = await message.answer("🧠 *Support AI javob tayyorlamoqda...*", parse_mode="Markdown")
     reply = await ai_service.ask_gemini_ai(query)
-    await wait_msg.edit_text(f"🤖 **Gemini AI maslahati:**\n\n{reply}")
+    await wait_msg.edit_text(f"🤖 **Support AI:**\n\n{reply}")
 
 
 # RASM QABUL QILISH

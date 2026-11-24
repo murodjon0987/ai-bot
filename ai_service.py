@@ -208,30 +208,59 @@ async def passport_3x4(input_path: str, output_path: str, wear_suit: bool = True
     return await loop.run_in_executor(None, _process_passport, input_path, output_path)
 
 
-# 7. GOOGLE GEMINI AI (SMART PHOTO ADVICE & CHAT)
+# 7. GOOGLE GEMINI AI (24/7 SUPPORT & PHOTO CONSULTANT)
 async def ask_gemini_ai(prompt: str) -> str:
     api_key = os.getenv("GEMINI_API_KEY", "")
     if not api_key:
-        return "Gemini API kaliti ulanmagan."
+        return "Gemini API kaliti ulanmagan. Iltimos admin bilan bog'laning."
     import aiohttp
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
+    
+    system_instruction = (
+        "Siz 'Xotira AI' (@xotira_ai_bot) fotostudiya botining rasmiy 24/7 aqlli yordamchisi (Support AI)siz.\n"
+        "Xotira AI boti quyidagi 6 ta asosiy xizmatni ko'rsatadi:\n"
+        "1. ✨ HD Tiniqlashtirish: Xira, sifatiz va eski suratlarni 4K tiniq holatga keltiradi.\n"
+        "2. 🎨 Rangli qilish: Tarixiy oq-qora suratlarga tabiiy, jonli ranglar beradi.\n"
+        "3. 🖼 Fonni o'chirish: Insonning kiyimi va sochlarini aslo kesmasdan, orqa fonni tozalab shaffof PNG stiker qiladi.\n"
+        "4. 👔 3x4 Pasport formati: Rasmiy hujjatlar uchun oppoq fon va avtomatik klassik kostyum-galstuk kiydirib, chop etishga tayyor 6 talik varaq qilib beradi.\n"
+        "5. 🎭 Anime & Art stili: Suratni komiks va anime san'at asariga aylantiradi.\n"
+        "6. 👀 Jonli harakat (GIF): Qotgan suratlarga harakat berib, jonli animatsiya yaratadi.\n\n"
+        "Qoidalar va Ma'lumotlar:\n"
+        "- Yangi a'zolarga telefon raqamini tasdiqlaganida 3 ta bepul urinish beriladi.\n"
+        "- Har bir taklif qilingan do'st uchun qo'shimcha +2 ta bepul urinish beriladi.\n"
+        "- Tariflar: 10 ta rasm (15 000 so'm), 30 ta rasm (35 000 so'm), 100 ta rasm (75 000 so'm).\n"
+        "- To'lovlar Click, Payme, Uzum Bank orqali qabul qilinadi va chek skrinshoti yuborilgach, admin tomonidan tezda tasdiqlanadi.\n\n"
+        "Vazifangiz: Foydalanuvchining savoliga o'zbek tilida juda muloyim, do'stona, tushunarli, aniq va professional javob berish. Chiroyli emojilardan me'yorida foydalaning."
+    )
+    
+    models = ["gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemini-flash-latest"]
+    
     payload = {
-        "contents": [{"parts": [{"text": f"Siz Xotira AI fotostudiyasining professional AI ekspertisiz. Foydalanuvchiga fotosuratlar, tahrirlash va dizayn bo'yicha o'zbek tilida qisqa, aniq va do'stona javob bering:\n\n{prompt}"}]}]
+        "contents": [
+            {
+                "parts": [
+                    {"text": f"{system_instruction}\n\nFoydalanuvchi savoli: {prompt}"}
+                ]
+            }
+        ]
     }
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts:
-                            return parts[0].get("text", "")
-                return "Gemini AI hozirda javob bera olmadi. Iltimos qayta urinib ko'ring."
-    except Exception as e:
-        logger.error(f"Gemini API xatolik: {e}")
-        return f"Gemini xatoligi: {e}"
+    
+    for model_name in models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            if parts:
+                                return parts[0].get("text", "")
+        except Exception as e:
+            logger.warning(f"Model {model_name} xatolik: {e}, keyingi modelga o'tilmoqda...")
+            continue
+            
+    return "Hozirda barcha AI modellar band. Iltimos, birozdan so'ng qayta urinib ko'ring yoki /start bosing."
 
 
 # 5. ANIME / ART / KOMIKS STILI (CARTOONIZE)

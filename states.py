@@ -2,6 +2,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 class UserStates(StatesGroup):
     waiting_for_phone = State()
+    waiting_for_ai_support = State()
 
 class PaymentStates(StatesGroup):
     waiting_for_receipt = State()
