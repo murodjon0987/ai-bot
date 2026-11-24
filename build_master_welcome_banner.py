@@ -60,29 +60,57 @@ def draw_pill(img_draw, box, text, fill_bg, outline_col, text_col, font=f_tiny):
     img_draw.text((box[0]+6, box[1]+2), text, fill=text_col, font=font)
 
 
-# --- 1. CARD: HD TINIQLASHTIRISH ---
+# --- 1. CARD: HD TINIQLASHTIRISH (Iconic Circular Split-Face Lens) ---
 face_src = Image.open("temp_photos/woman_face.jpg").convert("RGB")
 w_f, h_f = face_src.size
 crop_sz = min(w_f, h_f)
 face_sq = face_src.crop(((w_f-crop_sz)//2, int(h_f*0.06), (w_f+crop_sz)//2, int(h_f*0.06)+crop_sz)).resize((IMG_W, IMG_H), Image.Resampling.LANCZOS)
 
-left1 = face_sq.crop((0, 0, IMG_W//2, IMG_H))
-left1 = left1.filter(ImageFilter.GaussianBlur(3.2))
-left1 = ImageEnhance.Color(left1).enhance(0.7)
-left1 = ImageEnhance.Contrast(left1).enhance(0.9)
+src_circle = Image.open("temp_photos/original_hd_circle_face.png").convert("RGBA")
 
-right1 = face_sq.crop((IMG_W//2, 0, IMG_W, IMG_H))
-right1 = right1.filter(ImageFilter.UnsharpMask(radius=2, percent=190, threshold=1))
-right1 = ImageEnhance.Color(right1).enhance(1.15)
-right1 = ImageEnhance.Brightness(right1).enhance(1.04)
-
-card1_img = Image.new("RGB", (IMG_W, IMG_H))
-card1_img.paste(left1, (0, 0))
-card1_img.paste(right1, (IMG_W//2, 0))
+# Card 1 background: luxury dark gradient with ambient cyan aura
+card1_img = Image.new("RGB", (IMG_W, IMG_H), "#070d18")
 d1 = ImageDraw.Draw(card1_img)
-draw_divider_laser(d1, IMG_W//2, IMG_H, "#00f2fe")
-draw_pill(d1, (10, 10, 65, 26), "XIRA", "#000000cc", "#64748b", "#cbd5e1")
-draw_pill(d1, (IMG_W-75, 10, IMG_W-10, 26), "HD 4K", "#000000cc", "#00f2fe", "#00f2fe")
+
+# Subtle ambient glow
+d1.ellipse([(IMG_W//2 - 120, IMG_H//2 - 100), (IMG_W//2 + 120, IMG_H//2 + 100)], fill="#0d2847")
+card1_img = card1_img.filter(ImageFilter.GaussianBlur(25))
+d1 = ImageDraw.Draw(card1_img)
+
+# Subtle studio tech grid
+for gx in range(0, IMG_W, 20):
+    d1.line([(gx, 0), (gx, IMG_H)], fill="#0b1528", width=1)
+for gy in range(0, IMG_H, 20):
+    d1.line([(0, gy), (IMG_W, gy)], fill="#0b1528", width=1)
+
+# Circular mask for face
+cw, ch = 160, 160
+face_fit = src_circle.resize((cw, ch), Image.Resampling.LANCZOS)
+mask1 = Image.new("L", (cw, ch), 0)
+d_m1 = ImageDraw.Draw(mask1)
+d_m1.ellipse([(2, 2), (cw-2, ch-2)], fill=255)
+mask1 = mask1.filter(ImageFilter.GaussianBlur(1))
+
+cx1, cy1 = IMG_W // 2, IMG_H // 2
+
+# Outer glowing neon rings around the circle
+for r, col in [(86, "#083344"), (84, "#0e7490"), (82, "#00f2fe")]:
+    d1.ellipse([(cx1-r, cy1-r), (cx1+r, cy1+r)], outline=col, width=2)
+
+# Paste the circular face
+card1_img.paste(face_fit.convert("RGB"), (cx1 - cw//2, cy1 - ch//2), mask1)
+
+# Inner metallic rim
+d1.ellipse([(cx1 - cw//2, cy1 - ch//2), (cx1 + cw//2, cy1 + ch//2)], outline="#00f2fe", width=2)
+
+draw_pill(d1, (10, 10, 80, 26), "XIRA YUZ", "#000000cc", "#64748b", "#cbd5e1")
+draw_pill(d1, (IMG_W-90, 10, IMG_W-10, 26), "4K HD TINIQ", "#000000cc", "#00f2fe", "#00f2fe")
+
+# Center bottom badge on card
+b_w, b_h = 100, 20
+bx, by = cx1 - b_w//2, IMG_H - 24
+d1.rounded_rectangle([(bx, by), (bx+b_w, by+b_h)], radius=5, fill="#080c16ee", outline="#00f2fe", width=1)
+d1.text((bx+15, by+4), "YUZ TIKLASH", fill="#00f2fe", font=f_tiny)
 
 
 # --- 2. CARD: RANGLI QILISH (Family photo) ---
