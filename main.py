@@ -23,6 +23,7 @@ load_dotenv()
 
 TOKEN = os.getenv("BOT_TOKEN")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "xotira_ai_bot")
+SAFE_BOT_USERNAME = BOT_USERNAME.replace("_", "\\_")
 PORT = int(os.getenv("PORT", 8080))
 ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "7777")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
@@ -150,7 +151,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
         try:
             await bot.send_message(
                 user["referred_by"],
-                f"🎉 Yangi do'stingiz (@{username or full_name}) qo'shildi!\n"
+                f"🎉 Yangi do'stingiz (@{str(username or full_name).replace('_', '\\_')}) qo'shildi!\n"
                 f"🎁 Sizga **+2 ta bepul urinish** qo'shildi!"
             )
         except Exception:
@@ -158,7 +159,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
 
     welcome_text = (
         f"Assalomu alaykum, **{full_name}**! 👋\n\n"
-        f"Men **Jonli Xotira AI** (@{BOT_USERNAME}) ko'p funksiyali foto-studio boti bo'laman!\n\n"
+        f"Men **Jonli Xotira AI** (@{SAFE_BOT_USERNAME}) ko'p funksiyali foto-studio boti bo'laman!\n\n"
         f"🌟 **Mening 6 ta super imkoniyatim:**\n"
         f"✨ **HD Tiniqlashtirish** — Eski va xira suratlarni tiniq qilish\n"
         f"🎨 **Rangli qilish** — Oq-qora suratlarga tabiiy rang berish\n"
@@ -695,7 +696,7 @@ async def process_photo_action(callback: types.CallbackQuery):
             f"✅ **Tayyor bo'ldi!**\n\n"
             f"⚙️ Amal: *{action_label}*\n"
             f"⚡️ Qolgan balansingiz: **{user['credits']} ta**\n\n"
-            f"Do'stlaringizga ham ulashing: @{BOT_USERNAME}"
+            f"Do'stlaringizga ham ulashing: @{SAFE_BOT_USERNAME}"
         )
         
         await callback.message.delete()
