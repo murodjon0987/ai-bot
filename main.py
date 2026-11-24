@@ -663,9 +663,14 @@ async def process_ai_support_chat(message: types.Message, state: FSMContext):
         logger.error(f"Support AI xatosi: {e}")
         reply = "Kechirasiz, sun'iy intellekt xizmatida vaqtincha xatolik yuz berdi. Iltimos, birozdan so'ng qayta urinib ko'ring."
     
+    # Ortiqcha silkalar va buzuq username formatlarini tozalash
+    import re
+    clean_reply = re.sub(r'https?://\S+', '', reply).strip()
+    clean_reply = clean_reply.replace("@xotira_ai_bot", "Xotira AI").replace("@xotira", "Xotira AI").replace("xotira_ai_bot", "Xotira AI")
+    
     reply_text = (
         f"🤖 **Support AI:**\n\n"
-        f"{reply}\n\n"
+        f"{clean_reply}\n\n"
         f"━━━━━━━━━━━━━━━━━━━\n"
         f"💡 *Yana biror savolingiz bormi? Bemalol xohlagan mavzuda yozishingiz mumkin:*"
     )

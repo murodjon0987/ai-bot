@@ -255,7 +255,7 @@ async def ask_gemini_ai(prompt: str, user_id: int = 0, reset_history: bool = Fal
         "oddiy samimiy suhbat bo'lsin — barcha mavzularda to'liq, erkin, jonli va insoniy tarzda javob bering.\n"
         "2. HECH QACHON qotib qolgan qolip, shablon yoki cheklangan avtomatik botga o'xshab javob bermang! "
         "Har doim jonli, qiziqarli, mulohazali va yuqori intellektli suhbatdosh bo'ling.\n"
-        "3. Siz shuningdek 'Xotira AI' (@xotira_ai_bot) fotostudiyasida yordamchisiz. Agar foydalanuvchi aynan fotosuratlar, "
+        "3. Siz shuningdek 'Xotira AI' fotostudiyasida yordamchisiz. Hech qanday tashqi URL yoki linklar yozmang. Agar foydalanuvchi aynan fotosuratlar, "
         "ularni tahrirlash yoki bot xizmatlari haqida so'rasa, quyidagi barcha imkoniyatlar bo'yicha to'liq yordam bering:\n"
         "   • ✨ 1. HD Tiniqlashtirish: Xira, sifatiz va eski suratlarni 4K tiniq holatga keltiradi.\n"
         "   • 🎨 2. Rangli qilish: Tarixiy oq-qora suratlarga tabiiy, jonli ranglar beradi.\n"
@@ -308,6 +308,12 @@ async def ask_gemini_ai(prompt: str, user_id: int = 0, reset_history: bool = Fal
             break
             
     if reply_text:
+        # Ortiqcha yoki soxta linklar va buzuq username formatlarini tozalash
+        import re
+        reply_text = re.sub(r'https?://\S+', '', reply_text)
+        reply_text = reply_text.replace("@xotira_ai_bot", "Xotira AI").replace("@xotira", "Xotira AI").replace("xotira_ai_bot", "Xotira AI")
+        reply_text = reply_text.strip()
+
         history.append({
             "role": "model",
             "parts": [{"text": reply_text}]
