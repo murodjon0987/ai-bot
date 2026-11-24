@@ -19,6 +19,20 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        # Ustunlarni tekshirish va avtomatik qo'shish (Auto-migration)
+        async with db.execute("PRAGMA table_info(users)") as cursor:
+            columns = [row[1] for row in await cursor.fetchall()]
+            if "phone_number" not in columns:
+                await db.execute("ALTER TABLE users ADD COLUMN phone_number TEXT")
+            if "is_admin" not in columns:
+                await db.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+            if "credits" not in columns:
+                await db.execute("ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 3")
+            if "referred_by" not in columns:
+                await db.execute("ALTER TABLE users ADD COLUMN referred_by INTEGER")
+            if "total_restored" not in columns:
+                await db.execute("ALTER TABLE users ADD COLUMN total_restored INTEGER DEFAULT 0")
         
         # To'lovlar va cheklar jadvali
         await db.execute("""
@@ -59,6 +73,13 @@ async def get_or_create_user(user_id: int, username: str = None, full_name: str 
         ) as cursor:
             row = await cursor.fetchone()
             if row:
+                # Username yoki ismni yangilab qo'yish
+                if username or full_name:
+                    await db.execute(
+                        "UPDATE users SET username = COALESCE(?, username), full_name = COALESCE(?, full_name) WHERE user_id = ?",
+                        (username, full_name, user_id)
+                    )
+                    await db.commit()
                 return {
                     "user_id": row[0],
                     "credits": row[1],
@@ -93,9 +114,17 @@ async def get_or_create_user(user_id: int, username: str = None, full_name: str 
                 "is_new": True
             }
 
-async def update_user_phone(user_id: int, phone: str):
+async def update_user_phone(user_id: int, phone: str, username: str = None, full_name: str = None):
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("UPDATE users SET phone_number = ? WHERE user_id = ?", (phone, user_id))
+        async with db.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,)) as cur:
+            exists = await cur.fetchone()
+        if exists:
+            await db.execute("UPDATE users SET phone_number = ? WHERE user_id = ?", (phone, user_id))
+        else:
+            await db.execute(
+                "INSERT INTO users (user_id, username, full_name, phone_number, credits) VALUES (?, ?, ?, ?, 3)",
+                (user_id, username, full_name, phone)
+            )
         await db.commit()
 
 async def get_user(user_id: int):

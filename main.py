@@ -142,12 +142,14 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
         await db.set_user_admin(user_id, True)
         user["is_admin"] = True
 
-    # 1-QADAM: Telefon raqamini so'rash
-    if not user.get("phone_number"):
+    # 1-QADAM: Telefon raqamini so'rash (agar hali tasdiqlanmagan bo'lsa)
+    user_phone = user.get("phone_number")
+    if not user_phone:
+        display_name = full_name or message.from_user.first_name or "Foydalanuvchi"
         await message.answer(
-            f"👋 Assalomu alaykum, **{full_name}**!\n\n"
-            "Xush kelibsiz! Botdan foydalanishni boshlash uchun quyidagi tugmani bosib, "
-            "**telefon raqamingizni yuboring** 👇",
+            f"👋 Assalomu alaykum, **{display_name}**!\n\n"
+            "Xush kelibsiz! Botdan to'liq foydalanish va soxta akkauntlardan himoyalanish uchun, "
+            "quyidagi tugmani bosib, **telefon raqamingizni yuboring** 👇",
             reply_markup=get_contact_keyboard(),
             parse_mode="Markdown"
         )
@@ -155,7 +157,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
         return
 
     # Yangi foydalanuvchi taklif qilingan bo'lsa
-    if user["is_new"] and user["referred_by"]:
+    if user.get("is_new") and user.get("referred_by"):
         try:
             await bot.send_message(
                 user["referred_by"],
@@ -166,7 +168,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             pass
 
     welcome_text = (
-        f"Assalomu alaykum, **{full_name}**! 👋\n\n"
+        f"Assalomu alaykum, **{full_name or 'qadrli foydalanuvchi'}**! 👋\n\n"
         f"Men **Jonli Xotira AI** (@{SAFE_BOT_USERNAME}) ko'p funksiyali foto-studio boti bo'laman!\n\n"
         f"🌟 **Mening 6 ta super imkoniyatim:**\n"
         f"✨ **HD Tiniqlashtirish** — Eski va xira suratlarni tiniq qilish\n"
@@ -181,7 +183,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
     await message.answer(welcome_text, reply_markup=get_main_keyboard(user.get("is_admin")), parse_mode="Markdown")
 
 
-# TELEFON RAQAM QABUL QILISH
+# TELEFON RAQAM QABUL QILISH (KONTAKT TUGMASI ORQALI)
 @dp.message(F.contact)
 async def handle_contact(message: types.Message, state: FSMContext):
     contact = message.contact
@@ -190,17 +192,48 @@ async def handle_contact(message: types.Message, state: FSMContext):
     if not phone.startswith("+"):
         phone = "+" + phone
 
-    await db.update_user_phone(user_id, phone)
+    await db.update_user_phone(user_id, phone, message.from_user.username, message.from_user.full_name)
     await state.clear()
     
     user = await db.get_user(user_id)
+    credits = user.get("credits", 3) if user else 3
     await message.answer(
         "✅ **Raqamingiz muvaffaqiyatli tasdiqlandi!**\n\n"
-        f"🎁 Sizga **3 ta bepul urinish** taqdim etildi!\n"
+        f"🎁 Sizga **{credits} ta bepul urinish** taqdim etildi!\n"
         "Endi menga istalgan suratingizni yuborib, AI imkoniyatlarini sinab ko'rishingiz mumkin! 👇",
         reply_markup=get_main_keyboard(user.get("is_admin") if user else False),
         parse_mode="Markdown"
     )
+
+
+# TELEFON RAQAM QABUL QILISH (MATN KO'RINISHIDA YOZILGANDA)
+@dp.message(UserStates.waiting_for_phone, F.text)
+async def handle_phone_text(message: types.Message, state: FSMContext):
+    if message.text in ["/start", "⬅️ Asosiy menyu"]:
+        return
+    raw_text = message.text.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    import re
+    if re.match(r"^\+?\d{9,15}$", raw_text):
+        phone = raw_text if raw_text.startswith("+") else "+" + raw_text
+        user_id = message.from_user.id
+        await db.update_user_phone(user_id, phone, message.from_user.username, message.from_user.full_name)
+        await state.clear()
+        user = await db.get_user(user_id)
+        credits = user.get("credits", 3) if user else 3
+        await message.answer(
+            "✅ **Raqamingiz muvaffaqiyatli tasdiqlandi!**\n\n"
+            f"🎁 Sizga **{credits} ta bepul urinish** taqdim etildi!\n"
+            "Endi menga istalgan suratingizni yuborib, AI imkoniyatlarini sinab ko'rishingiz mumkin! 👇",
+            reply_markup=get_main_keyboard(user.get("is_admin") if user else False),
+            parse_mode="Markdown"
+        )
+    else:
+        await message.answer(
+            "⚠️ Iltimos, pastdagi **«📱 Telefon raqamni yuborish»** tugmasini bosing yoki "
+            "raqamingizni xalqaro formatda yozing (Masalan: `+998901234567`).",
+            reply_markup=get_contact_keyboard(),
+            parse_mode="Markdown"
+        )
 
 
 # TARIFLAR VA TO'LOV BO'LIMI
